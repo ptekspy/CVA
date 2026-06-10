@@ -307,6 +307,198 @@ export type CvaFunction = (overrides: Props?) -> Props
 export type Cva = (baseProps: Props, options: CvaOptions?) -> CvaFunction
 ```
 
+## Best Practices
+
+### Naming Conventions
+
+Use clear, semantic names for variants:
+
+```lua
+-- Good
+variants = {
+	intent = { primary = {...}, secondary = {...}, danger = {...} },
+	size = { sm = {...}, md = {...}, lg = {...} },
+}
+
+-- Less clear
+variants = {
+	theme = { a = {...}, b = {...}, c = {...} },
+	dim = { x = {...}, y = {...}, z = {...} },
+}
+```
+
+### Organizing Complex Components
+
+For components with many variants, consider grouping related options:
+
+```lua
+local buttonStyles = cva(baseProps, {
+	variants = {
+		-- Visual intent
+		intent = {
+			primary = {...},
+			secondary = {...},
+			danger = {...},
+			success = {...},
+		},
+		-- Size
+		size = {
+			xs = {...},
+			sm = {...},
+			md = {...},
+			lg = {...},
+			xl = {...},
+		},
+		-- State
+		disabled = {
+			["true"] = { Transparency = 0.5, Active = false },
+			["false"] = { Transparency = 0, Active = true },
+		},
+	},
+})
+```
+
+### Using Compound Variants for Complex Rules
+
+Use compound variants instead of deeply nested logic:
+
+```lua
+-- Good: Explicit compound rules
+compoundVariants = {
+	{ size = "lg", intent = "primary", props = { TextSize = 30 } },
+	{ size = "lg", intent = "danger", props = { TextSize = 28 } },
+}
+
+-- Less maintainable: Logic inside components
+if props.size == "lg" and props.intent == "primary" then
+	props.TextSize = 30
+end
+```
+
+## Troubleshooting
+
+### Props Not Applying
+
+If a prop isn't appearing in the output, check the resolution order. Direct props always win, so:
+
+```lua
+-- The BackgroundColor3 from intent will be overridden by the direct prop
+buttonStyles({
+	intent = "primary",
+	BackgroundColor3 = Color3.fromRGB(100, 100, 100),
+})
+```
+
+### Variant Not Recognized
+
+Make sure the variant value matches exactly (case-sensitive). Typos will be silently ignored:
+
+```lua
+local buttonStyles = cva(baseProps, {
+	variants = {
+		size = {
+			sm = {...},
+			md = {...},
+			lg = {...},
+		},
+	},
+})
+
+-- This works
+buttonStyles({ size = "lg" })
+
+-- This is silently ignored (typo: "LG")
+buttonStyles({ size = "LG" }) -- Uses default instead
+```
+
+### Compound Variants Not Applying
+
+Ensure all variant conditions in the compound match exactly. A compound only applies if ALL its conditions are met:
+
+```lua
+compoundVariants = {
+	{
+		intent = "primary",
+		size = "lg",
+		props = { TextSize = 30 },
+	},
+}
+
+-- Applies compound
+buttonStyles({ intent = "primary", size = "lg" })
+
+-- Does NOT apply compound (missing size condition)
+buttonStyles({ intent = "primary" })
+
+-- Does NOT apply compound (only one condition matches)
+buttonStyles({ intent = "primary", size = "md" })
+```
+
+## Examples
+
+### Label/Badge Component
+
+```lua
+local badgeStyles = cva(
+	{ Font = Enum.Font.GothamBold, TextScaled = true },
+	{
+		variants = {
+			variant = {
+				default = { BackgroundColor3 = Color3.fromRGB(200, 200, 200) },
+				success = { BackgroundColor3 = Color3.fromRGB(34, 197, 94) },
+				warning = { BackgroundColor3 = Color3.fromRGB(251, 146, 60) },
+				error = { BackgroundColor3 = Color3.fromRGB(239, 68, 68) },
+			},
+		},
+		defaultVariants = {
+			variant = "default",
+		},
+	}
+)
+```
+
+### Input Field Component
+
+```lua
+local inputStyles = cva(
+	{
+		BorderSizePixel = 1,
+		BorderColor3 = Color3.fromRGB(200, 200, 200),
+		Font = Enum.Font.Gotham,
+		TextSize = 14,
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+	},
+	{
+		variants = {
+			state = {
+				default = { BorderColor3 = Color3.fromRGB(200, 200, 200) },
+				focused = { BorderColor3 = Color3.fromRGB(59, 130, 246) },
+				error = { BorderColor3 = Color3.fromRGB(239, 68, 68) },
+			},
+			size = {
+				sm = { TextSize = 12 },
+				md = { TextSize = 14 },
+				lg = { TextSize = 16 },
+			},
+		},
+		defaultVariants = {
+			state = "default",
+			size = "md",
+		},
+	}
+)
+```
+
+## Resources
+
+- **Original CVA** — [cva.style](https://cva.style/)
+- **React Lua** — [jsdotlua/react-lua](https://github.com/jsdotlua/react-lua)
+- **Roblox** — [roblox.com](https://www.roblox.com)
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues or pull requests to improve CVA.
+
 ## License
 
 Apache-2.0
