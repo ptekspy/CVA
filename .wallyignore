@@ -1,0 +1,12 @@
+scripts/
+.github/
+docs/
+tests/
+.git
+.gitignore
+.selene.toml
+.stylua.toml
+aftman.toml
+selene.toml
+stylua.toml
+CVA_EXAMPLE.md

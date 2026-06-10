@@ -1,0 +1,313 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+usage() {
+	cat <<'EOF'
+Usage: scripts/release [options]
+
+Create a release from the conventional commits since the latest version tag.
+
+Options:
+  --dry-run              Show the planned release without changing anything
+  --yes                  Skip the confirmation prompt
+  --bump <type>          Override the inferred bump: major, minor, or patch
+  -h, --help             Show this help
+
+The script reads the package name and current version from wally.toml, uses the
+origin Git remote for GitHub, creates a release commit and v-prefixed tag,
+pushes them atomically, publishes with Wally, and publishes a GitHub release.
+EOF
+}
+
+fail() {
+	printf 'release: %s\n' "$*" >&2
+	exit 1
+}
+
+find_command() {
+	local candidate
+
+	for candidate in "$@"; do
+		if command -v "$candidate" >/dev/null 2>&1; then
+			command -v "$candidate"
+			return
+		fi
+	done
+
+	return 1
+}
+
+manifest_value() {
+	local key=$1
+
+	awk -v key="$key" '
+		/^[[:space:]]*\[package\][[:space:]]*\r?$/ {
+			in_package = 1
+			next
+		}
+		/^[[:space:]]*\[/ {
+			in_package = 0
+		}
+		in_package && $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
+			value = $0
+			sub("^[[:space:]]*" key "[[:space:]]*=[[:space:]]*", "", value)
+			sub("[[:space:]]*(#.*)?\r?$", "", value)
+			sub("^\"", "", value)
+			sub("\"$", "", value)
+			print value
+			exit
+		}
+	' "$MANIFEST"
+}
+
+set_manifest_version() {
+	local new_version=$1
+	local temporary_manifest
+	temporary_manifest=$(mktemp)
+
+	awk -v new_version="$new_version" '
+		/^[[:space:]]*\[package\][[:space:]]*\r?$/ {
+			in_package = 1
+			print
+			next
+		}
+		/^[[:space:]]*\[/ {
+			in_package = 0
+		}
+		in_package && /^[[:space:]]*version[[:space:]]*=/ {
+			match($0, /^[[:space:]]*/)
+			indent = substr($0, 1, RLENGTH)
+			ending = ($0 ~ /\r$/) ? "\r" : ""
+			print indent "version = \"" new_version "\"" ending
+			updated = 1
+			next
+		}
+		{
+			print
+		}
+		END {
+			if (!updated) {
+				exit 1
+			}
+		}
+	' "$MANIFEST" >"$temporary_manifest" || {
+		rm -f "$temporary_manifest"
+		fail "could not update package.version in wally.toml"
+	}
+
+	cat "$temporary_manifest" >"$MANIFEST"
+	rm -f "$temporary_manifest"
+}
+
+bump_version() {
+	local version=$1
+	local bump=$2
+	local major minor patch
+
+	IFS=. read -r major minor patch <<<"$version"
+
+	case "$bump" in
+	major)
+		printf '%s.0.0\n' "$((major + 1))"
+		;;
+	minor)
+		printf '%s.%s.0\n' "$major" "$((minor + 1))"
+		;;
+	patch)
+		printf '%s.%s.%s\n' "$major" "$minor" "$((patch + 1))"
+		;;
+	esac
+}
+
+dry_run=false
+assume_yes=false
+bump_override=
+
+while (($# > 0)); do
+	case "$1" in
+	--dry-run)
+		dry_run=true
+		;;
+	--yes)
+		assume_yes=true
+		;;
+	--bump)
+		shift
+		(($# > 0)) || fail "--bump requires major, minor, or patch"
+		bump_override=$1
+		;;
+	--bump=*)
+		bump_override=${1#*=}
+		;;
+	-h | --help)
+		usage
+		exit
+		;;
+	*)
+		fail "unknown option: $1"
+		;;
+	esac
+	shift
+done
+
+case "$bump_override" in
+"" | major | minor | patch) ;;
+*) fail "--bump must be major, minor, or patch" ;;
+esac
+
+GIT=$(find_command git) || fail "git is required"
+GH=$(find_command gh gh.exe) || fail "GitHub CLI (gh) is required"
+WALLY=$(find_command wally wally.exe) || fail "Wally is required"
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+ROOT=$("$GIT" -C "$SCRIPT_DIR/.." rev-parse --show-toplevel 2>/dev/null) ||
+	fail "scripts/release must be inside a Git repository"
+cd "$ROOT"
+
+MANIFEST="$ROOT/wally.toml"
+[[ -f "$MANIFEST" ]] || fail "wally.toml was not found at the repository root"
+
+[[ -z $("$GIT" status --porcelain --untracked-files=all) ]] ||
+	fail "the working tree must be clean"
+
+branch=$("$GIT" symbolic-ref --quiet --short HEAD) ||
+	fail "releases cannot be created from a detached HEAD"
+remote_url=$("$GIT" remote get-url origin 2>/dev/null) ||
+	fail "the repository must have an origin remote"
+
+case "$remote_url" in
+*github.com*) ;;
+*) fail "origin is not a GitHub repository: $remote_url" ;;
+esac
+
+package_name=$(manifest_value name)
+current_version=$(manifest_value version)
+
+[[ -n "$package_name" ]] || fail "package.name is missing from wally.toml"
+[[ "$current_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+	fail "package.version must be a stable semantic version (found: $current_version)"
+
+"$GH" auth status >/dev/null 2>&1 || fail "GitHub CLI is not authenticated"
+"$GH" auth setup-git >/dev/null
+
+"$GIT" fetch --quiet origin --tags
+
+if "$GIT" show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+	behind=$("$GIT" rev-list --count "HEAD..origin/$branch")
+	((behind == 0)) || fail "$branch is behind origin/$branch; pull or rebase before releasing"
+fi
+
+base_tag=
+for candidate in "v$current_version" "$current_version"; do
+	if "$GIT" show-ref --verify --quiet "refs/tags/$candidate" &&
+		"$GIT" merge-base --is-ancestor "$candidate" HEAD; then
+		base_tag=$candidate
+		break
+	fi
+done
+
+if [[ -n "$base_tag" ]]; then
+	current_tag=$base_tag
+	commit_range="$current_tag..HEAD"
+else
+	base_tag=$(
+		"$GIT" tag --merged HEAD --sort=-version:refname |
+			awk '/^v?[0-9]+\.[0-9]+\.[0-9]+$/ { print; exit }'
+	)
+	if [[ -n "$base_tag" ]]; then
+		commit_range="$base_tag..HEAD"
+	else
+		commit_range=HEAD
+	fi
+fi
+
+tag_prefix=v
+if [[ -n "$base_tag" && "$base_tag" != v* ]]; then
+	tag_prefix=
+fi
+
+commit_count=$("$GIT" rev-list --count "$commit_range")
+((commit_count > 0)) || fail "there are no commits to release after $base_tag"
+
+commit_text=$("$GIT" log "$commit_range" --format='%s%n%b')
+bump=$bump_override
+
+if [[ -z "$bump" ]]; then
+	if grep -Eq '^[[:alnum:]-]+(\([^)]*\))?!:|BREAKING[ -]CHANGE:' <<<"$commit_text"; then
+		bump=major
+	elif grep -Eq '^feat(\([^)]*\))?:' <<<"$commit_text"; then
+		bump=minor
+	elif grep -Eq '^(fix|perf|revert)(\([^)]*\))?:' <<<"$commit_text"; then
+		bump=patch
+	else
+		fail "no release-worthy conventional commits found; use --bump to override"
+	fi
+fi
+
+next_version=$(bump_version "$current_version" "$bump")
+tag="${tag_prefix}${next_version}"
+
+"$GIT" show-ref --verify --quiet "refs/tags/$tag" &&
+	fail "tag $tag already exists locally"
+if "$GIT" ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+	fail "tag $tag already exists on origin"
+fi
+
+printf '\nPackage:  %s\n' "$package_name"
+printf 'Branch:   %s\n' "$branch"
+printf 'Commits:  %s\n' "$commit_count"
+printf 'Bump:     %s\n' "$bump"
+printf 'Version:  %s -> %s\n' "$current_version" "$next_version"
+printf 'Tag:      %s\n\n' "$tag"
+"$GIT" log "$commit_range" --format='  %h %s'
+printf '\n'
+
+if "$dry_run"; then
+	printf 'Dry run complete. No files, tags, releases, or packages were changed.\n'
+	exit
+fi
+
+if ! "$assume_yes"; then
+	read -r -p "Release $package_name@$next_version? [y/N] " answer
+	case "$answer" in
+	y | Y | yes | YES) ;;
+	*) fail "release cancelled" ;;
+	esac
+fi
+
+package_archive=$(mktemp "${TMPDIR:-/tmp}/wally-release.XXXXXX.tar.gz")
+manifest_backup=$(mktemp "${TMPDIR:-/tmp}/wally-manifest.XXXXXX.toml")
+cp "$MANIFEST" "$manifest_backup"
+release_commit_created=false
+
+cleanup() {
+	local status=$?
+
+	if ((status != 0)) && ! "$release_commit_created"; then
+		"$GIT" reset --quiet -- wally.toml
+		cp "$manifest_backup" "$MANIFEST"
+	fi
+
+	rm -f "$package_archive" "$manifest_backup"
+}
+trap cleanup EXIT
+
+set_manifest_version "$next_version"
+"$WALLY" package --project-path . --output "$package_archive"
+
+"$GIT" add -- wally.toml
+"$GIT" commit -m "chore(release): $tag"
+release_commit_created=true
+"$GIT" tag -a "$tag" -m "$package_name $tag"
+
+"$GIT" push --atomic origin "HEAD:refs/heads/$branch" "refs/tags/$tag"
+"$GH" release create "$tag" \
+	--draft \
+	--verify-tag \
+	--generate-notes \
+	--title "$package_name $tag"
+"$WALLY" publish --project-path .
+"$GH" release edit "$tag" --draft=false --latest
+
+printf '\nReleased %s@%s.\n' "$package_name" "$next_version"

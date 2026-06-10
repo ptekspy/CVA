@@ -1,0 +1,14 @@
+[package]
+name = "ptekspy/cva"
+description = "Class Variance Authority for Roblox React - compose component props with variants"
+version = "1.0.0"
+license = "Apache-2.0"
+authors = ["ptekspy"]
+repository = "https://github.com/ptekspy/CVA"
+homepage = "https://github.com/ptekspy/CVA"
+keywords = ["CVA", "React", "Variants", "Roblox"]
+files = ["src"]
+registry = "https://github.com/UpliftGames/wally-index"
+realm = "shared"
+
+[dev-dependencies]
