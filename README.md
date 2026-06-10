@@ -25,6 +25,8 @@ wally add ptekspy/cva
 
 ### Basic Example
 
+Define button styles with intent (primary/secondary) and size (sm/md/lg) variants:
+
 ```lua
 local React = require(game:GetService("ReplicatedStorage").Packages.React)
 local cva = require(game:GetService("ReplicatedStorage").Packages.CVA)
@@ -68,7 +70,9 @@ local buttonStyles = cva({
 })
 ```
 
-### Using in a Component
+### Using in a React Component
+
+Use the returned function in your component to merge variant styles with component props:
 
 ```lua
 local function Button(props)
@@ -79,11 +83,55 @@ local function Button(props)
 		[React.Event.Activated] = props.onActivated,
 	}))
 end
+
+-- Usage
+React.createElement(Button, {
+	intent = "primary",
+	size = "lg",
+	Text = "Click Me",
+	onActivated = function()
+		print("Button clicked!")
+	end,
+})
+```
+
+### Overriding Default Variants
+
+You can override default variants on a per-call basis:
+
+```lua
+-- Uses default variants: intent="primary", size="md"
+local primaryButton = buttonStyles({ Text = "Save" })
+
+-- Override the intent variant
+local secondaryButton = buttonStyles({
+	intent = "secondary",
+	Text = "Cancel",
+})
+
+-- Override both variants
+local smallPrimaryButton = buttonStyles({
+	size = "sm",
+	Text = "Delete",
+})
+```
+
+### Direct Prop Overrides
+
+You can always override any prop directly, even those set by variants:
+
+```lua
+buttonStyles({
+	intent = "primary",
+	Text = "Click Me",
+	BackgroundColor3 = Color3.fromRGB(0, 0, 0), -- Overrides intent's color
+	TextSize = 14, -- Overrides size's TextSize
+})
 ```
 
 ### Compound Variants
 
-Compound variants allow you to set different props based on a combination of selected variants:
+Compound variants let you apply specific props when a combination of variants matches. This is useful for special styling when certain variant combinations occur:
 
 ```lua
 local buttonStyles = cva(
@@ -109,12 +157,26 @@ local buttonStyles = cva(
 				size = "lg",
 				props = {
 					TextSize = 30,
+					BackgroundColor3 = Color3.fromRGB(255, 200, 0), -- Brighter gold for large primary
+				},
+			},
+			{
+				intent = "danger",
+				size = "lg",
+				props = {
+					TextSize = 28,
+					BackgroundColor3 = Color3.fromRGB(255, 80, 80), -- Brighter red for large danger
 				},
 			},
 		},
 	}
 )
+
+-- When intent="primary" AND size="lg", the compound variant props are applied
+local largeButton = buttonStyles({ intent = "primary", size = "lg" })
 ```
+
+Compound variants are applied after regular variants but before direct prop overrides, allowing for fine-grained control over complex styling rules.
 
 ## API
 
