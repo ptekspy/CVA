@@ -31,6 +31,32 @@ local function matchesCompound(
 	return true
 end
 
+local function getVariantOrder(variants: Types.VariantMap, explicitOrder: { string }?): { string }
+	local order = {}
+	local included = {}
+
+	for _, variantName in ipairs(explicitOrder or {}) do
+		if variants[variantName] ~= nil and not included[variantName] then
+			table.insert(order, variantName)
+			included[variantName] = true
+		end
+	end
+
+	local remaining = {}
+	for variantName in pairs(variants) do
+		if not included[variantName] then
+			table.insert(remaining, variantName)
+		end
+	end
+	table.sort(remaining)
+
+	for _, variantName in ipairs(remaining) do
+		table.insert(order, variantName)
+	end
+
+	return order
+end
+
 local function cva(baseProps: Types.Props, options: Types.CvaOptions?): Types.CvaFunction
 	options = options or {}
 
@@ -38,12 +64,13 @@ local function cva(baseProps: Types.Props, options: Types.CvaOptions?): Types.Cv
 		overrides = overrides or {}
 
 		local variants = options.variants or {}
+		local variantOrder = getVariantOrder(variants, options.variantOrder)
 		local defaultVariants = options.defaultVariants or {}
 		local compoundVariants = options.compoundVariants or {}
 
 		local selectedVariants: { [string]: string | boolean | number } = merge(defaultVariants)
 
-		for variantName, _ in pairs(variants) do
+		for _, variantName in ipairs(variantOrder) do
 			if overrides[variantName] ~= nil then
 				selectedVariants[variantName] = overrides[variantName]
 			end
@@ -51,7 +78,8 @@ local function cva(baseProps: Types.Props, options: Types.CvaOptions?): Types.Cv
 
 		local resolvedProps: Types.Props = merge(baseProps)
 
-		for variantName, variantOptions in pairs(variants) do
+		for _, variantName in ipairs(variantOrder) do
+			local variantOptions = variants[variantName]
 			local selectedValue = selectedVariants[variantName]
 			local variantProps = variantOptions[tostring(selectedValue)]
 
@@ -68,7 +96,7 @@ local function cva(baseProps: Types.Props, options: Types.CvaOptions?): Types.Cv
 
 		local cleanProps: Types.Props = merge(overrides)
 
-		for variantName, _ in pairs(variants) do
+		for _, variantName in ipairs(variantOrder) do
 			cleanProps[variantName] = nil
 		end
 

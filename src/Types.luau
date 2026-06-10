@@ -66,6 +66,7 @@ export type CompoundVariant = {
 ]=]
 export type CvaOptions = {
 	variants: VariantMap?,
+	variantOrder: { string }?,
 	defaultVariants: { [string]: string | boolean | number }?,
 	compoundVariants: { CompoundVariant }?,
 }

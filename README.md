@@ -11,6 +11,7 @@ Inspired by [class-variance-authority](https://cva.style/), but adapted for Reac
 - **Type-safe variants** — Define component styles with named variants and variant options
 - **Default variants** — Set sensible defaults that can be overridden
 - **Compound variants** — Combine multiple variant conditions to apply specific props
+- **Deterministic precedence** — Apply variants in an explicit `variantOrder`, with a stable alphabetical fallback
 - **Props merging** — Intelligent merging ensures base props, variants, compounds, and overrides are applied in the correct order
 - **Clean API** — Simple, declarative API inspired by industry-standard CVA
 - **React Lua integration** — Works seamlessly with React Lua components
