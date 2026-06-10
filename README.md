@@ -2,7 +2,18 @@
 
 **C**lass **V**ariance **A**uthority for Roblox React.
 
-A utility for composing Roblox GUI element properties (props) with typed variants, default variants, and compound variants. Inspired by [class-variance-authority](https://cva.style/), but adapted for React Lua component development.
+A powerful utility library for composing Roblox GUI element properties (props) with type-safe variants, default variants, and compound variants. CVA helps you build reusable, maintainable component style systems that scale across your project.
+
+Inspired by [class-variance-authority](https://cva.style/), but adapted for React Lua component development in Roblox.
+
+## Features
+
+- **Type-safe variants** — Define component styles with named variants and variant options
+- **Default variants** — Set sensible defaults that can be overridden
+- **Compound variants** — Combine multiple variant conditions to apply specific props
+- **Props merging** — Intelligent merging ensures base props, variants, compounds, and overrides are applied in the correct order
+- **Clean API** — Simple, declarative API inspired by industry-standard CVA
+- **React Lua integration** — Works seamlessly with React Lua components
 
 ## Installation
 
