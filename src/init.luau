@@ -2,14 +2,8 @@
 
 local Types = require(script.Types)
 
-type Props = Types.Props
-type VariantMap = Types.VariantMap
-type CompoundVariant = Types.CompoundVariant
-type CvaOptions = Types.CvaOptions
-type CvaFunction = Types.CvaFunction
-
-local function merge(...: Props): Props
-	local result: Props = {}
+local function merge(...: Types.Props): Types.Props
+	local result: Types.Props = {}
 
 	for _, source in ipairs({ ... }) do
 		if type(source) == "table" then
@@ -23,7 +17,7 @@ local function merge(...: Props): Props
 end
 
 local function matchesCompound(
-	compound: CompoundVariant,
+	compound: Types.CompoundVariant,
 	selectedVariants: { [string]: string | boolean | number }
 ): boolean
 	for key, value in pairs(compound) do
@@ -37,10 +31,10 @@ local function matchesCompound(
 	return true
 end
 
-local function cva(baseProps: Props, options: CvaOptions?): CvaFunction
+local function cva(baseProps: Types.Props, options: Types.CvaOptions?): Types.CvaFunction
 	options = options or {}
 
-	return function(overrides: Props?): Props
+	return function(overrides: Types.Props?): Types.Props
 		overrides = overrides or {}
 
 		local variants = options.variants or {}
@@ -55,7 +49,7 @@ local function cva(baseProps: Props, options: CvaOptions?): CvaFunction
 			end
 		end
 
-		local resolvedProps: Props = merge(baseProps)
+		local resolvedProps: Types.Props = merge(baseProps)
 
 		for variantName, variantOptions in pairs(variants) do
 			local selectedValue = selectedVariants[variantName]
@@ -72,7 +66,7 @@ local function cva(baseProps: Props, options: CvaOptions?): CvaFunction
 			end
 		end
 
-		local cleanProps: Props = merge(overrides)
+		local cleanProps: Types.Props = merge(overrides)
 
 		for variantName, _ in pairs(variants) do
 			cleanProps[variantName] = nil
@@ -81,14 +75,5 @@ local function cva(baseProps: Props, options: CvaOptions?): CvaFunction
 		return merge(resolvedProps, cleanProps)
 	end
 end
-
-export type Props = Types.Props
-export type VariantMap = Types.VariantMap
-export type VariantOption = Types.VariantOption
-export type VariantGroup = Types.VariantGroup
-export type CompoundVariant = Types.CompoundVariant
-export type CvaOptions = Types.CvaOptions
-export type CvaFunction = Types.CvaFunction
-export type Cva = Types.Cva
 
 return cva

@@ -94,3 +94,5 @@ export type CvaFunction = (overrides: Props?) -> Props
 	Signature: (baseProps: Props, options: CvaOptions?) -> CvaFunction
 ]=]
 export type Cva = (baseProps: Props, options: CvaOptions?) -> CvaFunction
+
+return {}
