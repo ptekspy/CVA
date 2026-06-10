@@ -178,41 +178,133 @@ local largeButton = buttonStyles({ intent = "primary", size = "lg" })
 
 Compound variants are applied after regular variants but before direct prop overrides, allowing for fine-grained control over complex styling rules.
 
-## API
+## API Reference
 
-### `cva(baseProps, options?)`
+### `cva(baseProps, options?): CvaFunction`
 
-Returns a function that merges base props with selected variant props.
+Creates and returns a function that merges base props with variant and compound variant props based on the options provided.
 
-#### Arguments
+#### Parameters
 
-- `baseProps: { [any]: any }` — Base props applied to all variants
-- `options: CvaOptions?` — Configuration object with the following properties:
-  - `variants: VariantMap?` — Map of variant names to variant values
-  - `defaultVariants: { [string]: string }?` — Default variant selections
-  - `compoundVariants: { CompoundVariant }?` — Conditional variant combinations
+**`baseProps: Props`**
+
+A table of base properties that are applied to every call. These form the foundation of your component styling.
+
+```lua
+local baseProps = {
+	BorderSizePixel = 0,
+	AutoButtonColor = true,
+	Font = Enum.Font.GothamBold,
+}
+```
+
+**`options: CvaOptions?` (optional)**
+
+Configuration object for defining variants and compound variants.
+
+##### `options.variants: VariantMap?`
+
+A table mapping variant names to tables of variant options and their props. Each variant option becomes a choice that consumers of the CVA can select.
+
+```lua
+variants = {
+	-- Variant name
+	intent = {
+		-- Variant option
+		primary = { BackgroundColor3 = Color3.fromRGB(255, 170, 0) },
+		secondary = { BackgroundColor3 = Color3.fromRGB(40, 40, 40) },
+	},
+	size = {
+		sm = { Size = UDim2.fromOffset(120, 36), TextSize = 16 },
+		md = { Size = UDim2.fromOffset(180, 44), TextSize = 20 },
+		lg = { Size = UDim2.fromOffset(240, 56), TextSize = 26 },
+	},
+}
+```
+
+##### `options.defaultVariants: { [string]: string | number | boolean }?`
+
+Default variant selections that are used when a variant is not explicitly provided.
+
+```lua
+defaultVariants = {
+	intent = "primary",
+	size = "md",
+}
+```
+
+##### `options.compoundVariants: { CompoundVariant }?`
+
+A table of compound variant definitions. Each compound variant applies additional props when all of its variant conditions match.
+
+```lua
+compoundVariants = {
+	{
+		intent = "primary",
+		size = "lg",
+		props = { TextSize = 30 },
+	},
+	{
+		intent = "danger",
+		size = "lg",
+		props = { TextSize = 28 },
+	},
+}
+```
 
 #### Returns
 
-A function that accepts props and returns the resolved props object.
+A function with the signature `function(overrides: Props?): Props` that returns a merged props table.
 
-### Props Merging
+### Props Merging Order
 
-When you call the returned function with props:
+When you call the returned function with props, they are merged in this order:
 
-1. Default variants are applied first
-2. Selected variants override defaults
-3. Matching compound variants are applied
-4. Passed-in props override everything (except variant names, which are cleaned up)
+1. **Base props** are applied first (lowest priority)
+2. **Default variants** are applied second
+3. **Selected variants** override default variants (based on what you pass in)
+4. **Matching compound variants** are applied (can override both)
+5. **Directly passed props** are merged last (highest priority)
 
-This ensures you can always override any style prop directly when needed:
+This ensures maximum control while maintaining a predictable resolution order:
 
 ```lua
 buttonStyles({
 	intent = "primary",
-	Text = "Click Me",
-	BackgroundColor3 = Color3.fromRGB(0, 0, 0), -- Overrides intent's color
+	size = "lg",
+	BackgroundColor3 = Color3.fromRGB(0, 0, 0), -- This wins
 })
+-- Final color: RGB(0, 0, 0) from direct override
+-- (not from intent variant or compound variant)
+```
+
+## Type Definitions
+
+CVA exports several types for use in Luau:
+
+```lua
+export type Props = { [any]: any }
+
+export type VariantOption = { [any]: any }
+
+export type VariantGroup = { [string]: VariantOption }
+
+export type VariantMap = { [string]: VariantGroup }
+
+export type CompoundVariant = {
+	[string]: string | number | boolean,
+	props: Props,
+}
+
+export type CvaOptions = {
+	variants: VariantMap?,
+	defaultVariants: { [string]: string | number | boolean }?,
+	compoundVariants: { CompoundVariant }?,
+}
+
+export type CvaFunction = (overrides: Props?) -> Props
+
+export type Cva = (baseProps: Props, options: CvaOptions?) -> CvaFunction
 ```
 
 ## License
