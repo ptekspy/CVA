@@ -10,5 +10,3 @@ keywords = ["CVA", "React", "Variants", "Roblox"]
 files = ["src"]
 registry = "https://github.com/UpliftGames/wally-index"
 realm = "shared"
-
-[dev-dependencies]
